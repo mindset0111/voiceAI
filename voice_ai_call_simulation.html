@@ -1,0 +1,527 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Voice AI Call Simulation — Non-CLI “Where is my order”</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --navy:#1F4E79; --blue:#2E75B6; --teal:#0F7B7C; --amber:#C77700; --green:#2E7D32;
+  --ink:#2A3038; --grey:#5A6470; --line:#D8DEE6; --lane:#F4F7FA; --bg:#EEF2F6; --card:#FFFFFF;
+  --lblue:#EAF2FA; --lteal:#E4F3F3; --lgreen:#E9F3EA; --lamber:#FDF3E2;
+  --sans:'IBM Plex Sans',-apple-system,'Segoe UI',Roboto,Arial,sans-serif;
+  --mono:'IBM Plex Mono',ui-monospace,'Cascadia Code',Consolas,monospace;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{background:var(--bg);color:var(--ink);font-family:var(--sans);font-size:14px}
+button{font-family:var(--sans)}
+
+.wrap{max-width:1360px;margin:0 auto;padding:16px 18px 26px}
+
+/* ---------- header ---------- */
+header{display:flex;flex-wrap:wrap;align-items:flex-end;gap:10px 18px;margin-bottom:12px}
+header h1{font-size:20px;font-weight:700;color:var(--navy);letter-spacing:.2px}
+header .sub{font-size:12px;color:var(--grey)}
+.chips{display:flex;gap:6px;flex-wrap:wrap;margin-left:auto}
+.chip{font-size:10.5px;font-weight:600;padding:3px 9px;border-radius:20px;border:1px solid var(--line);background:#fff;color:var(--grey)}
+.chip.b{background:var(--lblue);color:var(--navy);border-color:#BFD5EC}
+.chip.t{background:var(--lteal);color:var(--teal);border-color:#BCDFDF}
+.chip.a{background:var(--lamber);color:var(--amber);border-color:#F0DBB4}
+
+/* ---------- layout ---------- */
+.grid{display:grid;grid-template-columns:minmax(0,1.55fr) minmax(320px,1fr);gap:14px;align-items:start}
+.panel{background:var(--card);border:1px solid var(--line);border-radius:10px;box-shadow:0 1px 3px rgba(31,78,121,.06)}
+.panel h3{font-size:11px;font-weight:700;letter-spacing:1.2px;color:var(--grey);padding:10px 14px 8px;border-bottom:1px solid var(--line)}
+
+/* ---------- architecture map ---------- */
+#mapPanel{position:relative;overflow:hidden}
+#map{position:relative;padding:12px 14px 14px}
+.lane{background:var(--lane);border:1px solid var(--line);border-radius:8px;padding:8px 10px 10px;margin-bottom:9px;position:relative}
+.lane:last-child{margin-bottom:0}
+.lane .lt{font-size:9.5px;font-weight:700;letter-spacing:1px;color:var(--grey);margin-bottom:7px;display:flex;align-items:center;gap:8px}
+.lane .lt .host{margin-left:auto;font-size:9px;font-weight:700;color:#fff;padding:2px 8px;border-radius:10px;letter-spacing:.5px}
+.lane.l2{background:#F1F6FC;border-color:#C9DBEE}
+.lane.l3{background:#EFF7F7;border-color:#C2E0E0}
+.nrow{display:flex;gap:8px;flex-wrap:wrap}
+.node{flex:1 1 0;min-width:96px;background:#fff;border:1.4px solid var(--line);border-radius:7px;padding:7px 8px 8px;position:relative;transition:all .35s ease;opacity:.55}
+.node .nt{font-size:11px;font-weight:600;line-height:1.25}
+.node .ns{font-size:9.5px;color:var(--grey);margin-top:2px;line-height:1.3}
+.node .badge{display:none;margin-top:5px;font-size:9px;font-weight:700;font-family:var(--mono);padding:2px 6px;border-radius:4px;width:max-content;max-width:100%}
+.node.has-badge .badge{display:block}
+.node.on{opacity:1;border-color:var(--blue);box-shadow:0 0 0 3px rgba(46,117,182,.18),0 2px 8px rgba(31,78,121,.12);transform:translateY(-1px)}
+.node.on.tealed{border-color:var(--teal);box-shadow:0 0 0 3px rgba(15,123,124,.18),0 2px 8px rgba(15,123,124,.12)}
+.node.on.ambered{border-color:var(--amber);box-shadow:0 0 0 3px rgba(199,119,0,.20)}
+.node.on.greened{border-color:var(--green);box-shadow:0 0 0 3px rgba(46,125,50,.20)}
+.node.was{opacity:.85}
+.node .dot{position:absolute;top:7px;right:8px;width:7px;height:7px;border-radius:50%;background:#C9D2DC}
+.node.on .dot{background:var(--green);box-shadow:0 0 0 3px rgba(46,125,50,.18);animation:pulse 1.4s infinite}
+@keyframes pulse{0%,100%{transform:scale(1)}50%{transform:scale(1.35)}}
+#wires{position:absolute;inset:0;pointer-events:none;z-index:5}
+#wires .flow{fill:none;stroke-width:2.2;stroke-linecap:round;stroke-dasharray:7 6;animation:dash 1.1s linear infinite}
+@keyframes dash{to{stroke-dashoffset:-13}}
+#wires .wlabel{font-family:var(--mono);font-size:9.5px;font-weight:600;paint-order:stroke;stroke:#fff;stroke-width:3px}
+@media (prefers-reduced-motion: reduce){#wires .flow{animation:none}.node.on .dot{animation:none}}
+
+/* ---------- right column ---------- */
+.right{display:flex;flex-direction:column;gap:14px;min-width:0}
+#transcript{padding:12px 14px;max-height:335px;overflow-y:auto;scroll-behavior:smooth}
+.msg{display:flex;margin-bottom:9px;animation:fadeUp .35s ease}
+@keyframes fadeUp{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+.msg .b{max-width:82%;padding:7px 11px;border-radius:11px;font-size:12.5px;line-height:1.45}
+.msg.ai .b{background:var(--lblue);border:1px solid #C9DBEE;color:var(--navy);border-bottom-left-radius:3px}
+.msg.cust{justify-content:flex-end}
+.msg.cust .b{background:var(--navy);color:#fff;border-bottom-right-radius:3px}
+.msg.sys{justify-content:center}
+.msg.sys .b{background:transparent;border:none;color:var(--grey);font-size:10.5px;font-style:italic;text-align:center;padding:1px}
+.msg .who{font-size:9px;font-weight:700;letter-spacing:.8px;color:var(--grey);display:block;margin-bottom:2px}
+.msg.cust .who{color:#B9CCE2}
+
+#inspector{padding:0 0 6px}
+#inspHead{display:flex;align-items:center;gap:8px;padding:9px 14px;border-bottom:1px solid var(--line);font-family:var(--mono);font-size:10.5px;flex-wrap:wrap}
+#inspHead .route{font-weight:600;color:var(--navy)}
+#inspHead .api{color:var(--grey)}
+#inspHead .method{font-weight:700;color:#fff;background:var(--teal);padding:1px 7px;border-radius:4px;font-size:9.5px}
+pre#payload{font-family:var(--mono);font-size:10.8px;line-height:1.55;padding:10px 14px;overflow-x:auto;max-height:305px;overflow-y:auto;white-space:pre;color:var(--ink)}
+pre#payload .k{color:var(--teal)}
+pre#payload .s{color:var(--navy)}
+pre#payload .n{color:var(--amber)}
+pre#payload .c{color:#8A94A0;font-style:italic}
+pre#payload .hl{background:var(--lgreen);border-radius:3px}
+
+/* ---------- step bar ---------- */
+#stepbar{margin-top:14px;background:var(--card);border:1px solid var(--line);border-radius:10px;padding:12px 16px;box-shadow:0 1px 3px rgba(31,78,121,.06)}
+#dots{display:flex;gap:4px;margin-bottom:11px}
+#dots .d{flex:1;height:5px;border-radius:3px;background:#DDE4EB;cursor:pointer;transition:background .25s}
+#dots .d.fill{background:var(--blue)}
+#dots .d.cur{background:var(--navy)}
+.sb{display:flex;gap:16px;align-items:flex-start;flex-wrap:wrap}
+.sb .info{flex:1;min-width:260px}
+.sb .stepno{font-family:var(--mono);font-size:10px;font-weight:600;color:var(--teal);letter-spacing:1px}
+.sb h2{font-size:15.5px;font-weight:700;color:var(--navy);margin:2px 0 4px}
+.sb p{font-size:12.5px;color:var(--grey);line-height:1.5;max-width:760px}
+.ctrls{display:flex;gap:8px;align-items:center}
+.btn{border:1px solid var(--line);background:#fff;color:var(--navy);font-weight:600;font-size:12.5px;padding:8px 16px;border-radius:7px;cursor:pointer;transition:all .15s}
+.btn:hover{border-color:var(--blue);background:var(--lblue)}
+.btn:focus-visible{outline:2px solid var(--blue);outline-offset:2px}
+.btn.primary{background:var(--navy);border-color:var(--navy);color:#fff}
+.btn.primary:hover{background:var(--blue)}
+.btn:disabled{opacity:.4;cursor:default}
+.btn.playing{background:var(--amber);border-color:var(--amber);color:#fff}
+.hint{font-size:10px;color:#98A2AE;margin-top:8px}
+
+@media (max-width:980px){.grid{grid-template-columns:1fr}.node{min-width:86px}}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header>
+  <div>
+    <h1>Voice AI — Live Call Simulation</h1>
+    <div class="sub">End-to-end walkthrough of one real call with dummy data · GNR “Where is my order” journey</div>
+  </div>
+  <div class="chips">
+    <span class="chip a">NON-CLI CALLER</span>
+    <span class="chip b">Sarah Mitchell · Acct NX-4482913</span>
+    <span class="chip t">Order NX100234567 · Blue Slim-Fit Jeans</span>
+    <span class="chip">Promise date: today, 05 Aug 2026</span>
+  </div>
+</header>
+
+<div class="grid">
+  <!-- ================= MAP ================= -->
+  <div class="panel" id="mapPanel">
+    <h3>ARCHITECTURE — WHO IS ACTIVE AT THIS STEP</h3>
+    <div id="map">
+      <svg id="wires"></svg>
+
+      <div class="lane l1">
+        <div class="lt">1 · CUSTOMER CHANNEL</div>
+        <div class="nrow">
+          <div class="node" id="n-cust" style="max-width:170px">
+            <span class="dot"></span><div class="nt">📱 Customer</div>
+            <div class="ns">Sarah · calling from 07911 246810</div>
+            <div class="badge" style="background:var(--lamber);color:var(--amber)"></div>
+          </div>
+          <div class="node" id="n-gen">
+            <span class="dot"></span><div class="nt">☎️ Genesys / NICE Telephony</div>
+            <div class="ns">Call routing · CLI detection · IVR · transfer</div>
+            <div class="badge" style="background:var(--lamber);color:var(--amber)"></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="lane l2">
+        <div class="lt">2 · VOICE AI PLATFORM <span class="host" style="background:var(--navy)">HOSTED IN EXL</span></div>
+        <div class="nrow">
+          <div class="node" id="n-stt"><span class="dot"></span><div class="nt">🎙 Azure STT</div><div class="ns">Speech → text</div><div class="badge" style="background:var(--lblue);color:var(--navy)"></div></div>
+          <div class="node" id="n-orch"><span class="dot"></span><div class="nt">⚙️ Orchestrator</div><div class="ns">Invokes agents</div><div class="badge" style="background:var(--lblue);color:var(--navy)"></div></div>
+          <div class="node" id="n-llm"><span class="dot"></span><div class="nt">🧠 LLM</div><div class="ns">Intent + entities</div><div class="badge" style="background:var(--lblue);color:var(--navy)"></div></div>
+          <div class="node" id="n-dlg"><span class="dot"></span><div class="nt">💬 Dialogue Mgr</div><div class="ns">Next best turn</div><div class="badge" style="background:var(--lblue);color:var(--navy)"></div></div>
+          <div class="node" id="n-dec"><span class="dot"></span><div class="nt">🔀 Decision Engine</div><div class="ns">Resolve vs transfer</div><div class="badge" style="background:var(--lgreen);color:var(--green)"></div></div>
+          <div class="node" id="n-tts"><span class="dot"></span><div class="nt">🔊 Azure TTS</div><div class="ns">Text → speech</div><div class="badge" style="background:var(--lblue);color:var(--navy)"></div></div>
+        </div>
+      </div>
+
+      <div class="lane l3">
+        <div class="lt">3 · AI AGENT LAYER <span class="host" style="background:var(--teal)">HOSTED IN NEXT</span></div>
+        <div class="nrow">
+          <div class="node tealed" id="n-idv"><span class="dot"></span><div class="nt">🪪 ID&V Agent</div><div class="ns">Non-CLI path: phone → name → postcode</div><div class="badge" style="background:var(--lgreen);color:var(--green)"></div></div>
+          <div class="node tealed" id="n-ord"><span class="dot"></span><div class="nt">📦 Order Agent</div><div class="ns">Open orders + details</div><div class="badge" style="background:var(--lteal);color:var(--teal)"></div></div>
+          <div class="node tealed" id="n-eva"><span class="dot"></span><div class="nt">🚚 Evri Tracking Agent</div><div class="ns">Latest parcel event</div><div class="badge" style="background:var(--lteal);color:var(--teal)"></div></div>
+          <div class="node tealed" id="n-zda"><span class="dot"></span><div class="nt">🎫 Zendesk Ticket Agent</div><div class="ns">Wrap-up + ticket</div><div class="badge" style="background:var(--lteal);color:var(--teal)"></div></div>
+        </div>
+      </div>
+
+      <div class="lane l4">
+        <div class="lt">4 · ENTERPRISE SYSTEMS</div>
+        <div class="nrow">
+          <div class="node" id="n-mf"><span class="dot"></span><div class="nt">🗄 Mainframe — z/OS APIs</div><div class="ns">Customer PII · accounts · orders</div><div class="badge" style="background:#EEF1F4;color:var(--grey)"></div></div>
+          <div class="node" id="n-evs"><span class="dot"></span><div class="nt">📍 Evri Tracking Service</div><div class="ns">Tracking events · exceptions</div><div class="badge" style="background:#EEF1F4;color:var(--grey)"></div></div>
+          <div class="node" id="n-zd"><span class="dot"></span><div class="nt">🎧 Zendesk CRM</div><div class="ns">Case management · agent desktop</div><div class="badge" style="background:#EEF1F4;color:var(--grey)"></div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= RIGHT ================= -->
+  <div class="right">
+    <div class="panel">
+      <h3>LIVE CALL TRANSCRIPT — +44 (0)333 777 4577</h3>
+      <div id="transcript"></div>
+    </div>
+    <div class="panel" id="inspector">
+      <h3>DATA INSPECTOR — WHAT IS BEING FETCHED / SENT</h3>
+      <div id="inspHead"></div>
+      <pre id="payload"></pre>
+    </div>
+  </div>
+</div>
+
+<!-- ================= STEP BAR ================= -->
+<div id="stepbar">
+  <div id="dots"></div>
+  <div class="sb">
+    <div class="info">
+      <div class="stepno" id="stepno"></div>
+      <h2 id="stitle"></h2>
+      <p id="sdesc"></p>
+    </div>
+    <div class="ctrls">
+      <button class="btn" id="bPrev">← Back</button>
+      <button class="btn playing" id="bPlay">▶ Auto-play</button>
+      <button class="btn primary" id="bNext">Next step →</button>
+      <button class="btn" id="bReset">↺ Restart</button>
+    </div>
+  </div>
+  <div class="hint">Tip: use ← → arrow keys, or click any segment of the progress bar to jump to that step.</div>
+</div>
+
+</div>
+
+<script>
+/* ============================================================
+   SCENARIO (dummy data)
+   Caller: Sarah Mitchell — calling from an UNREGISTERED mobile
+   Registered phone 07700 900123 · Postcode LS1 4AB
+   Order NX100234567 — Blue Slim-Fit Jeans — promised TODAY
+   Evri latest event: "Delivered at store" → arrives within 24h
+============================================================ */
+const AI="ALEX (VOICE AI)", CU="SARAH (CUSTOMER)";
+
+const STEPS=[
+{
+ no:"STEP 01 · CUSTOMER CHANNEL",
+ title:"Customer dials the Next helpline",
+ desc:"Sarah calls +44 (0)333 777 4577 from her partner's mobile — a number NOT registered on her Next account. Genesys answers the call and captures the inbound CLI (caller line identity).",
+ nodes:["n-cust","n-gen"],
+ edges:[["n-cust","n-gen","voice audio"]],
+ badges:{"n-cust":"CLI 07911 246810"},
+ chat:[["sys","Inbound call · 05 Aug 2026 · 10:47 GMT"],["sys","🔔 Ringing… Genesys answers"]],
+ route:["Customer → Genesys","INBOUND_CALL","SIP"],
+ payload:{event:"call.received",ani_cli:"+44 7911 246810",dnis:"+44 333 777 4577",timestamp:"2026-08-05T10:47:12Z",channel:"voice"}
+},
+{
+ no:"STEP 02 · CLI DETECTION",
+ title:"Genesys checks the caller's number — not registered",
+ desc:"Genesys looks up the inbound CLI against registered customer numbers. No match is found, so the call is flagged NON-CLI: identity is unknown and full ID&V will be needed before any account data can be shared.",
+ nodes:["n-gen"],
+ edges:[],
+ badges:{"n-gen":"NON-CLI ⚠"},
+ chat:[["sys","CLI lookup: 07911 246810 → no registered customer found"]],
+ route:["Genesys · internal","CLI_LOOKUP","GET"],
+ payload:{query:{cli:"+44 7911 246810"},result:{registered:false,customer_id:null},routing_flag:"NON_CLI",idv_status:"NOT_VERIFIED",_note:"Full identity check required by Voice AI"}
+},
+{
+ no:"STEP 03 · SYSTEM HANDSHAKE",
+ title:"Handshake: Genesys hands the call to Voice AI",
+ desc:"Genesys opens a SIP/WebSocket session with the EXL-hosted Voice AI platform and streams the live audio, together with the call metadata envelope — CLI status, ID&V status and conversation context. This is the system-to-system handshake.",
+ nodes:["n-gen","n-stt","n-orch"],
+ edges:[["n-gen","n-orch","audio stream + metadata"]],
+ badges:{},
+ chat:[["sys","— call connected to Voice AI platform (EXL) —"]],
+ route:["Genesys → Voice AI","SESSION_HANDSHAKE","WSS"],
+ payload:{session_id:"gx-7f3a-2026-0805",audio:"stream://rtp/opus-16k",metadata:{cli_status:"NON_CLI",idv_status:"NOT_VERIFIED",queue:"NEXT_GNR",language:"en-GB"},context:{prior_ivr_turns:0}}
+},
+{
+ no:"STEP 04 · GREETING & INTENT",
+ title:"Voice AI greets Sarah and captures her intent",
+ desc:"Alex (the Voice AI) greets the caller. Azure STT transcribes her reply in real time and the LLM classifies the intent as GNR_ORDER_STATUS — a 'where is my order' enquiry, which is in scope for automated handling.",
+ nodes:["n-stt","n-llm","n-tts","n-cust"],
+ edges:[["n-cust","n-stt","speech"],["n-stt","n-llm","transcribed text"]],
+ badges:{"n-llm":"INTENT: GNR_ORDER_STATUS"},
+ chat:[["ai","Thank you for calling Next. This is Alex, an AI voice assistant on a recorded line. How may I assist you today?"],["cust","Hi — I ordered some jeans and I want to check where my order is."]],
+ route:["Azure STT → LLM","INTENT_CLASSIFY","POST"],
+ payload:{utterance:"I ordered some jeans and I want to check where my order is",intent:"GNR_ORDER_STATUS",confidence:0.97,entities:{product_hint:"jeans"},in_scope:true}
+},
+{
+ no:"STEP 05 · AGENT INVOCATION",
+ title:"Orchestrator invokes the ID&V Agent — Non-CLI path",
+ desc:"Because the caller is NON-CLI, no account data may be shared until identity is proven. The Conversation Orchestrator invokes the ID&V Agent (hosted in NEXT) on its non-CLI path: capture phone number, then validate name and postcode.",
+ nodes:["n-orch","n-idv"],
+ edges:[["n-orch","n-idv","authentication request"]],
+ badges:{"n-idv":"NON-CLI PATH"},
+ chat:[["sys","Orchestrator → ID&V Agent: authenticate caller (non-CLI)"]],
+ route:["Orchestrator → ID&V Agent","AUTHENTICATE_CALLER","POST"],
+ payload:{request:"authenticate_caller",path:"NON_CLI",checks_required:["registered_phone","full_name","postcode"],session_id:"gx-7f3a-2026-0805"}
+},
+{
+ no:"STEP 06 · CAPTURE PHONE NUMBER",
+ title:"Alex asks for the registered phone number",
+ desc:"The ID&V Agent needs a key to find the account. Alex asks Sarah for the phone number registered on her Next account — she gives her own mobile (07700 900123), not the one she's calling from.",
+ nodes:["n-tts","n-cust","n-stt","n-idv"],
+ edges:[["n-tts","n-cust","synthesized speech"],["n-cust","n-stt","speech"]],
+ badges:{},
+ chat:[["ai","Happy to help with that. Before I can access your account, I'll need to verify your identity. Can you confirm the phone number registered on your account?"],["cust","Yes, it's 07700 900123."]],
+ route:["ID&V Agent · captured","ENTITY_EXTRACT","—"],
+ payload:{captured:{registered_phone:"07700 900123"},note:"Caller's live CLI (07911 246810) differs from stated registered number — lookup by stated number"}
+},
+{
+ no:"STEP 07 · MAINFRAME LOOKUP",
+ title:"ID&V Agent looks up the account on the Mainframe",
+ desc:"The ID&V Agent calls the z/OS customer API with the stated phone number. The Mainframe returns the matching customer profile — name, postcode, email, account number and associated orders. PII is masked in transit and only used for validation.",
+ nodes:["n-idv","n-mf"],
+ edges:[["n-idv","n-mf","customer lookup ⇄ profile"]],
+ badges:{"n-mf":"PROFILE FOUND"},
+ chat:[["sys","z/OS API: customer profile retrieved for 07700 900123 ✓"]],
+ route:["ID&V Agent → Mainframe","GET /zos/customers?phone=07700900123","GET"],
+ payload:{match:true,customer:{account_no:"NX-4482913",full_name:"Sarah Mitchell",postcode:"LS1 4AB",email:"s.mit****@example.co.uk",phone:"07700 900123"},open_orders:["NX100234567"],pii_masking:"applied"}
+},
+{
+ no:"STEP 08 · VALIDATE NAME",
+ title:"Security check 1 of 2 — full name",
+ desc:"Alex asks Sarah to confirm her full name. The ID&V Agent compares her spoken answer with the Mainframe profile: 'Sarah Mitchell' — MATCH ✓. One more check to go.",
+ nodes:["n-tts","n-cust","n-idv"],
+ edges:[["n-tts","n-cust","question"],["n-cust","n-idv","answer → compare vs DB"]],
+ badges:{"n-idv":"NAME ✓"},
+ chat:[["ai","Thank you. Could you also confirm your full name?"],["cust","Sarah Mitchell."],["sys","Name check: 'Sarah Mitchell' vs DB 'Sarah Mitchell' → MATCH ✓"]],
+ route:["ID&V Agent · validate","MATCH_FIELD(full_name)","—"],
+ payload:{field:"full_name",spoken:"Sarah Mitchell",db_value:"Sarah Mitchell",result:"MATCH",checks_passed:1,checks_required:2}
+},
+{
+ no:"STEP 09 · VALIDATE POSTCODE — ID&V PASS",
+ title:"Security check 2 of 2 — postcode · identity confirmed",
+ desc:"Alex asks for the postcode. 'LS1 4AB' matches the account record — ID&V PASSED. The authenticated customer profile is returned to the Orchestrator and account data may now be discussed.",
+ nodes:["n-tts","n-cust","n-idv","n-orch"],
+ edges:[["n-cust","n-idv","postcode → compare vs DB"],["n-idv","n-orch","authenticated profile"]],
+ badges:{"n-idv":"ID&V PASS ✓✓"},
+ chat:[["ai","Perfect. And lastly, can you confirm your postcode?"],["cust","It's LS1 4AB."],["sys","Postcode check → MATCH ✓ · ID&V PASSED — caller authenticated as Sarah Mitchell"]],
+ route:["ID&V Agent → Orchestrator","AUTH_RESULT","POST"],
+ payload:{idv_status:"PASSED",method:"NON_CLI (phone + name + postcode)",authenticated_customer:{account_no:"NX-4482913",name:"Sarah Mitchell"},data_access:"UNLOCKED"}
+},
+{
+ no:"STEP 10 · ORDER AGENT",
+ title:"Order Agent fetches Sarah's open order from the Mainframe",
+ desc:"With identity confirmed, the Orchestrator invokes the Order Agent. It queries the z/OS order API and finds one open order: NX100234567 — Blue Slim-Fit Jeans, ordered 30 Jul, promised for delivery TODAY (05 Aug 2026).",
+ nodes:["n-orch","n-ord","n-mf"],
+ edges:[["n-orch","n-ord","order request"],["n-ord","n-mf","order lookup ⇄ details"]],
+ badges:{"n-ord":"1 OPEN ORDER","n-mf":"ORDER NX100234567"},
+ chat:[["sys","Order Agent: 1 open order found — Blue Slim-Fit Jeans, promise date 05 Aug 2026"]],
+ route:["Order Agent → Mainframe","GET /zos/orders?account=NX-4482913&status=open","GET"],
+ payload:{orders:[{order_no:"NX100234567",item:"Blue Slim-Fit Jeans (Mid Wash, W30 L32)",value:"£48.00",order_date:"2026-07-30",promise_date:"2026-08-05",status:"IN_TRANSIT",carrier:"EVRI",delivery_address:"14 Regent Terrace, Leeds, LS1 4AB"}]}
+},
+{
+ no:"STEP 11 · CONFIRM WITH CUSTOMER",
+ title:"Alex confirms which order Sarah is asking about",
+ desc:"There is a single undelivered order, so the Dialogue Manager has Alex confirm it rather than list options. Sarah confirms it's the blue jeans.",
+ nodes:["n-dlg","n-tts","n-cust"],
+ edges:[["n-dlg","n-tts","response text"],["n-tts","n-cust","speech"]],
+ badges:{},
+ chat:[["ai","Thank you, Sarah — I've successfully verified your identity. I can see you have order NX100234567, Blue Slim-Fit Jeans, that hasn't been marked as delivered yet. Would you like an update on that order?"],["cust","Yes please, that's the one — they were supposed to arrive today."]],
+ route:["Dialogue Manager → TTS","RENDER_TURN","POST"],
+ payload:{turn:"confirm_single_open_order",order_ref:"NX100234567",customer_confirmed:true}
+},
+{
+ no:"STEP 12 · EVRI TRACKING",
+ title:"Evri Tracking Agent pulls the live parcel events",
+ desc:"The Evri Tracking Agent calls the Evri API with the tracking barcode. The event history shows the parcel moving through the network — the LATEST event, stamped 06:42 this morning, is 'DELIVERED AT STORE': the parcel has arrived at Sarah's local delivery store for final-mile delivery.",
+ nodes:["n-orch","n-eva","n-evs"],
+ edges:[["n-orch","n-eva","tracking request"],["n-eva","n-evs","tracking request ⇄ events"]],
+ badges:{"n-eva":"DELIVERED AT STORE","n-evs":"4 EVENTS"},
+ chat:[["sys","Evri API: latest event 05 Aug 06:42 — 'Delivered at store' (local delivery point, Leeds LS1)"]],
+ route:["Evri Agent → Evri Service","GET /tracking/H00482Z9917364","GET"],
+ payload:{barcode:"H00482Z9917364",events:[{ts:"2026-08-03 21:10",status:"Parcel processed at Yorkshire hub"},{ts:"2026-08-04 18:35",status:"Parcel received at courier depot"},{ts:"2026-08-05 04:56",status:"Out for delivery to local store"},{ts:"2026-08-05 06:42",status:"★ DELIVERED AT STORE — local delivery point, Leeds LS1",latest:true}],promise_date:"2026-08-05",exception:false}
+},
+{
+ no:"STEP 13 · DECISION ENGINE",
+ title:"Decision Engine: resolve by Voice AI, or transfer?",
+ desc:"The Decision Engine applies the business rule: current date (05 Aug) ≤ promise date (05 Aug) AND the parcel shows no delay exception → the enquiry stays with Voice AI. No human transfer needed. Standard rule: once at the local store, delivery completes within 24 hours.",
+ nodes:["n-dec","n-eva","n-ord"],
+ edges:[["n-eva","n-dec","latest event"],["n-ord","n-dec","order status"]],
+ badges:{"n-dec":"RESOLVE — AI ✓"},
+ chat:[["sys","Decision: 05 Aug ≤ 05 Aug AND no delay exception → VOICE AI RESOLVES (no transfer)"]],
+ route:["Decision Engine · evaluate","APPLY_BUSINESS_RULES","—"],
+ payload:{inputs:{current_date:"2026-08-05",promise_date:"2026-08-05",latest_evri_status:"DELIVERED AT STORE",delay_exception:false},rule:"IF current_date <= promise_date AND NOT delayed THEN resolve ELSE transfer",decision:"RESOLVE_BY_VOICE_AI",eta_guidance:"within 24 hours of store arrival"}
+},
+{
+ no:"STEP 14 · VOICE AI ADVISES",
+ title:"Alex gives Sarah the answer: delivery within 24 hours",
+ desc:"The Dialogue Manager composes the resolution and Azure TTS speaks it: the jeans have reached the local delivery store this morning and will be delivered within 24 hours — on track against today's promise date. Sarah is satisfied.",
+ nodes:["n-dlg","n-tts","n-cust","n-dec"],
+ edges:[["n-dec","n-dlg","resolution decision"],["n-tts","n-cust","synthesized speech"]],
+ badges:{},
+ chat:[["ai","Good news, Sarah. Based on the latest tracking information, your order NX100234567 — Blue Slim-Fit Jeans — was delivered to your local store at 6:42 this morning. From this point your order will be delivered within 24 hours, so you should receive it on time. Is there anything else I can help with?"],["cust","That's great, no — that's everything. Thank you!"],["ai","Thank you so much for allowing me to help you, Sarah. Hope you have a good day ahead!"]],
+ route:["Dialogue Mgr → Azure TTS → Customer","SPEAK_RESOLUTION","POST"],
+ payload:{resolution:"INFORMED",message_facts:{latest_status:"Delivered at store · 06:42",eta:"within 24 hours",promise_date_met:true},customer_sentiment:"satisfied",call_outcome:"RESOLVED_BY_AI"}
+},
+{
+ no:"STEP 15 · ZENDESK WRAP-UP",
+ title:"Zendesk Ticket Agent logs the full interaction",
+ desc:"As the call completes, the Zendesk Ticket Agent asynchronously creates ticket #NX-88231: conversation summary, authentication method, intent, order number, outcome and transcript link. If Sarah ever calls back, a human advisor sees the whole story. Call ends — resolved end-to-end by Voice AI, no human needed.",
+ nodes:["n-zda","n-zd"],
+ edges:[["n-zda","n-zd","ticket update (async)"]],
+ badges:{"n-zda":"TICKET SENT","n-zd":"#NX-88231 SOLVED"},
+ chat:[["sys","— call ended · duration 3m 42s · resolved by Voice AI —"],["sys","🎫 Zendesk ticket #NX-88231 created with summary + transcript"]],
+ route:["Zendesk Agent → Zendesk CRM","POST /api/v2/tickets","POST"],
+ payload:{ticket:"#NX-88231",status:"solved",requester:"Sarah Mitchell (NX-4482913)",summary:"Non-CLI caller verified via phone+name+postcode. GNR enquiry for order NX100234567 (Blue Slim-Fit Jeans). Latest Evri status 'Delivered at store'; advised delivery within 24h, on time vs promise date 05 Aug.",fields:{auth_status:"IDV_PASSED_NON_CLI",intent:"GNR_ORDER_STATUS",order_no:"NX100234567",outcome:"RESOLVED_BY_VOICE_AI",transcript_link:"nx://calls/gx-7f3a-2026-0805/transcript",handled_by:"Voice AI — no human transfer"}}
+}
+];
+
+/* ============================================================ */
+const $=id=>document.getElementById(id);
+let cur=-1, playing=null;
+const seenChats=new Set();
+
+const dots=$('dots');
+STEPS.forEach((s,i)=>{const d=document.createElement('div');d.className='d';d.title=s.title;d.onclick=()=>{stop();go(i,true)};dots.appendChild(d)});
+
+function esc(x){return String(x).replace(/&/g,'&amp;').replace(/</g,'&lt;')}
+function colorJSON(o){
+  const j=JSON.stringify(o,null,2);
+  return esc(j)
+    .replace(/"([^"]+)":/g,'<span class="k">"$1"</span>:')
+    .replace(/: "([^"]*)"/g,': <span class="s">"$1"</span>')
+    .replace(/: (true|false|null|\d[\d.]*)/g,': <span class="n">$1</span>')
+    .replace(/(★[^"<]*)/g,'<span class="hl">$1</span>');
+}
+
+function addChat(kind,text,key){
+  if(seenChats.has(key))return;
+  seenChats.add(key);
+  const m=document.createElement('div');m.className='msg '+kind;
+  const who=kind==='ai'?`<span class="who">${AI}</span>`:kind==='cust'?`<span class="who">${CU}</span>`:'';
+  m.innerHTML=`<div class="b">${who}${esc(text)}</div>`;
+  $('transcript').appendChild(m);
+  $('transcript').scrollTop=$('transcript').scrollHeight;
+}
+
+function drawWires(step){
+  const svg=$('wires'), map=$('map'), r=map.getBoundingClientRect();
+  svg.setAttribute('width',r.width);svg.setAttribute('height',r.height);
+  svg.innerHTML='';
+  step.edges.forEach(([a,b,label],i)=>{
+    const ra=$(a).getBoundingClientRect(), rb=$(b).getBoundingClientRect();
+    const ca={x:ra.left-r.left+ra.width/2,y:ra.top-r.top+ra.height/2,w:ra.width,h:ra.height};
+    const cb={x:rb.left-r.left+rb.width/2,y:rb.top-r.top+rb.height/2,w:rb.width,h:rb.height};
+    let x1,y1,x2,y2;
+    const horiz=Math.abs(cb.x-ca.x)>Math.abs(cb.y-ca.y)&&Math.abs(cb.y-ca.y)<40;
+    if(horiz){ // side-to-side, same lane
+      if(cb.x>ca.x){x1=ca.x+ca.w/2;x2=cb.x-cb.w/2-6;}else{x1=ca.x-ca.w/2;x2=cb.x+cb.w/2+6;}
+      y1=ca.y-ca.h/4;y2=cb.y-cb.h/4;
+    }else{     // lane-to-lane: bottom edge -> top edge (or reverse)
+      if(cb.y>ca.y){y1=ca.y+ca.h/2;y2=cb.y-cb.h/2;}else{y1=ca.y-ca.h/2;y2=cb.y+cb.h/2;}
+      x1=ca.x;x2=cb.x;
+    }
+    const mx=(x1+x2)/2, my=horiz?Math.min(ca.y-ca.h/2,cb.y-cb.h/2)-14:(y1+y2)/2;
+    const teal=[a,b].some(n=>['n-idv','n-ord','n-eva','n-zda','n-mf','n-evs','n-zd'].includes(n));
+    const col=teal?'var(--teal)':'var(--blue)';
+    const p=document.createElementNS('http://www.w3.org/2000/svg','path');
+    p.setAttribute('d',`M ${x1} ${y1} Q ${mx} ${my} ${x2} ${y2}`);
+    p.setAttribute('class','flow');p.setAttribute('stroke',col);
+    svg.appendChild(p);
+    const t=document.createElementNS('http://www.w3.org/2000/svg','text');
+    t.setAttribute('x',mx);t.setAttribute('y',horiz?my-5:my-7);
+    t.setAttribute('text-anchor','middle');t.setAttribute('class','wlabel');t.setAttribute('fill',col);
+    t.textContent=label;
+    svg.appendChild(t);
+    // arrowhead
+    const ang=Math.atan2(y2-my,x2-mx);
+    const ah=document.createElementNS('http://www.w3.org/2000/svg','path');
+    const ax=x2-Math.cos(ang)*14, ay=y2-Math.sin(ang)*14;
+    ah.setAttribute('d',`M ${ax} ${ay} l ${Math.cos(ang-2.6)*9} ${Math.sin(ang-2.6)*9} M ${ax} ${ay} l ${Math.cos(ang+2.6)*9} ${Math.sin(ang+2.6)*9}`);
+    ah.setAttribute('stroke',col);ah.setAttribute('stroke-width','2.2');ah.setAttribute('fill','none');ah.setAttribute('stroke-linecap','round');
+    svg.appendChild(ah);
+  });
+}
+
+function go(i,jump){
+  if(i<0||i>=STEPS.length)return;
+  // if jumping backwards, rebuild transcript from scratch
+  if(i<cur||jump){$('transcript').innerHTML='';seenChats.clear();
+    for(let k=0;k<=i;k++)STEPS[k].chat.forEach((c,j)=>addChat(c[0],c[1],k+'-'+j));
+  }else{
+    for(let k=cur+1;k<=i;k++)STEPS[k].chat.forEach((c,j)=>addChat(c[0],c[1],k+'-'+j));
+  }
+  cur=i;const s=STEPS[i];
+
+  // nodes
+  document.querySelectorAll('.node').forEach(n=>{n.classList.remove('on','was','has-badge');n.querySelector('.badge').textContent='';});
+  // persisted badges + "was" state
+  for(let k=0;k<=i;k++){
+    STEPS[k].nodes.forEach(id=>{if(!s.nodes.includes(id))$(id).classList.add('was')});
+    Object.entries(STEPS[k].badges||{}).forEach(([id,b])=>{const n=$(id);n.classList.add('has-badge');n.querySelector('.badge').textContent=b;});
+  }
+  s.nodes.forEach(id=>{
+    const n=$(id);n.classList.add('on');
+    if(['n-idv','n-ord','n-eva','n-zda'].includes(id))n.classList.add('tealed');
+    if(id==='n-dec'&&i>=12)n.classList.add('greened');
+  });
+
+  drawWires(s);
+
+  // inspector
+  $('inspHead').innerHTML=`<span class="method">${esc(s.route[2])}</span><span class="route">${esc(s.route[0])}</span><span class="api">${esc(s.route[1])}</span>`;
+  $('payload').innerHTML=colorJSON(s.payload);
+
+  // step bar
+  $('stepno').textContent=s.no+`  ·  ${i+1} / ${STEPS.length}`;
+  $('stitle').textContent=s.title;
+  $('sdesc').textContent=s.desc;
+  [...dots.children].forEach((d,k)=>{d.classList.toggle('fill',k<i);d.classList.toggle('cur',k===i)});
+  $('bPrev').disabled=i===0;
+  $('bNext').textContent=i===STEPS.length-1?'✓ Flow complete':'Next step →';
+  $('bNext').disabled=i===STEPS.length-1;
+}
+
+function stop(){if(playing){clearInterval(playing);playing=null;$('bPlay').textContent='▶ Auto-play'}}
+$('bNext').onclick=()=>{stop();go(cur+1)};
+$('bPrev').onclick=()=>{stop();go(cur-1,true)};
+$('bReset').onclick=()=>{stop();go(0,true)};
+$('bPlay').onclick=()=>{
+  if(playing){stop();return}
+  if(cur>=STEPS.length-1)go(0,true);
+  $('bPlay').textContent='⏸ Pause';
+  playing=setInterval(()=>{if(cur>=STEPS.length-1)stop();else go(cur+1)},4200);
+};
+document.addEventListener('keydown',e=>{
+  if(e.key==='ArrowRight'){stop();go(cur+1)}
+  if(e.key==='ArrowLeft'){stop();go(cur-1,true)}
+});
+window.addEventListener('resize',()=>{if(cur>=0)drawWires(STEPS[cur])});
+
+go(0);
+</script>
+</body>
+</html>
